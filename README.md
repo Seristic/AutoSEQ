@@ -1,105 +1,75 @@
-# SKSE "Hello, world!"
+# AutoSEQ
 
-Very simple C++ SKSE plugin for Skyrim!
+An SKSE plugin for Skyrim Special Edition / Anniversary Edition that finds and repairs outdated or missing **SEQ files** every time the game starts.
 
----
+## The problem
 
-- [SKSE "Hello, world!"](#skse-hello-world)
-- [What does it do?](#what-does-it-do)
-- [CommonLibSSE NG](#commonlibsse-ng)
-- [Requirements](#requirements)
-  - [Opening the project](#opening-the-project)
-- [Project setup](#project-setup)
-  - [Finding Your "`mods`" Folder](#finding-your-mods-folder)
-- [Setup your own repository](#setup-your-own-repository)
-- [Sharing is Caring](#sharing-is-caring)
+Every plugin with *Start Game Enabled* quests needs a matching `Data\Seq\<plugin>.seq` file. It lists those quests by FormID so the game can set up their dialogue. When the SEQ file doesn't match the plugin, the quests still start, but their dialogue, scenes and some script fragments don't work until you save and reload.
 
-# What does it do?
+SEQ files go stale when:
 
-After running Skyrim, once at the Main Menu, press the `~` key to open the game console.
+- a plugin is **ESL-flagged and its FormIDs are compacted**. The SEQ still lists the old IDs.
+- a plugin's **master list changes**, which shifts the first byte of every FormID.
+- quests are added after the SEQ was generated, or the author never shipped one.
 
-You will see that we printed `"Hello, world!"` to the console at the Main Menu 🐉
+Many mods pack their SEQ inside their BSA. A loose, regenerated SEQ file **does not override** a copy inside a BSA (tested in game), so regenerating it in xEdit isn't always enough.
 
-# CommonLibSSE NG
+## What AutoSEQ does
 
-Because this uses [CommonLibSSE NG](https://github.com/CharmedBaryon/CommonLibSSE-NG), it supports Skyrim SE, AE, GOG, and VR.
+At the main menu, AutoSEQ:
 
-[CommonLibSSE NG](https://github.com/CharmedBaryon/CommonLibSSE-NG) is a fork of the popular [powerof3 fork](https://github.com/powerof3/CommonLibSSE) of the _original_ `CommonLibSSE` library created by [Ryan McKenzie](https://github.com/Ryan-rsm-McKenzie) in [2018](https://github.com/Ryan-rsm-McKenzie/CommonLibSSE/commit/224773c424bdb8e36c761810cdff0fcfefda5f4a).
+1. Reads every loaded plugin from disk and works out what its SEQ file must contain, using the same rule as xEdit's *Create SEQ File*: every Start Game Enabled quest the plugin adds, or that it newly flags as start-enabled.
+2. Reads the SEQ file the game actually sees (loose or inside a BSA) and compares the two.
+3. Writes corrected copies of any stale or missing SEQ files into `AutoSEQ.bsa`. The empty, ESL-flagged `AutoSEQ.esp` loads that archive, and because it loads last, it overrides the outdated copies. No other mod's files are touched.
+4. Prints a summary to the console, shows a message box when a restart is needed, and logs every plugin and quest it fixed.
 
-# Requirements
+A missing SEQ is only created when one of the plugin's start-enabled quests has dialogue. The base game and Creation Club files are skipped.
 
-- [Visual Studio 2022](https://visualstudio.microsoft.com/) (_the free Community edition_)
-- [`vcpkg`](https://github.com/microsoft/vcpkg)
-  - 1. Clone the repository using git OR [download it as a .zip](https://github.com/microsoft/vcpkg/archive/refs/heads/master.zip)
-  - 2. Go into the `vcpkg` folder and double-click on `bootstrap-vcpkg.bat`
-  - 3. Edit your system or user Environment Variables and add a new one:
-    - Name: `VCPKG_ROOT`  
-      Value: `C:\path\to\wherever\your\vcpkg\folder\is`
+As a safety net, after a save loads AutoSEQ also starts any start-enabled quest that has never run. Quests that ran and were stopped on purpose are left alone.
 
-<img src="https://raw.githubusercontent.com/SkyrimDev/Images/main/images/screenshots/Setting%20Environment%20Variables/VCPKG_ROOT.png" height="150">
+## Installing
 
-## Opening the project
+1. Install with Mod Organizer 2 or Vortex.
+2. Enable `AutoSEQ.esp` and put it at the **very end** of your load order. It's ESL-flagged, so it doesn't use a full plugin slot.
+3. Start the game. If AutoSEQ reports that it updated `AutoSEQ.bsa`, restart Skyrim before starting or loading a game.
 
-Once you have Visual Studio 2022 installed, you can open this folder in basically any C++ editor, e.g. [VS Code](https://code.visualstudio.com/) or [CLion](https://www.jetbrains.com/clion/) or [Visual Studio](https://visualstudio.microsoft.com/)
-- > _for VS Code, if you are not automatically prompted to install the [C++](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) and [CMake Tools](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools) extensions, please install those and then close VS Code and then open this project as a folder in VS Code_
+**Requirements:** [SKSE64](https://skse.silverlock.org/) and [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444). Developed and tested on 1.6.1170.
 
-You may need to click `OK` on a few windows, but the project should automatically run CMake!
+## Checking the results
 
-It will _automatically_ download [CommonLibSSE NG](https://github.com/CharmedBaryon/CommonLibSSE-NG) and everything you need to get started making your new plugin!
+Open the console (`~`) at the main menu:
 
-# Project setup
+| Message | Meaning |
+|---|---|
+| `AutoSEQ: all N SEQ files are correct (M supplied by AutoSEQ.bsa)` | Everything is fine. |
+| `AutoSEQ: X of N SEQ files were out of date - corrected in AutoSEQ.bsa, restart Skyrim to apply` | Fixes were written; restart once. |
+| `AutoSEQ: X of N SEQ files are still out of date - load AutoSEQ.esp last` | The archive isn't winning; check the load order. |
 
-By default, when this project compiles it will output a `.dll` for your SKSE plugin into the `build/` folder.
+Details are in `Documents\My Games\Skyrim Special Edition\SKSE\AutoSEQ.log`.
 
-If you want to configure this project to output your plugin files
-into your Skyrim Special Edition's "`Data`" folder:
+`tools/seqcheck.py` runs the same check without starting the game, including SEQ files inside BSAs:
 
-- Set the `SKYRIM_FOLDER` environment variable to the path of your Skyrim installation  
-  e.g. `C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edition`
+```
+python tools/seqcheck.py --mo2 "<MO2 folder>" --profile "<profile>" --game-data "<Skyrim>/Data" -v
+python tools/seqcheck.py --data "<Skyrim>/Data" --plugins "<path to plugins.txt>" -v
+```
 
-<img src="https://raw.githubusercontent.com/SkyrimDev/Images/main/images/screenshots/Setting%20Environment%20Variables/SKYRIM_FOLDER.png" height="150">
+## Building
 
-If you want to configure this project to output your plugin files
-into your "`mods`" folder:  
-(_for Mod Organizer 2 or Vortex_)
+Requirements: Visual Studio 2022 with the C++ workload (MSVC v143), CMake and vcpkg (`VCPKG_ROOT` set). Visual Studio's bundled vcpkg works.
 
-- Set the `SKYRIM_MODS_FOLDER` environment variable to the path of your mods folder:  
-  e.g. `C:\Users\<user>\AppData\Local\ModOrganizer\Skyrim Special Edition\mods`  
-  e.g. `C:\Users\<user>\AppData\Roaming\Vortex\skyrimse\mods`
+- Open the folder in Visual Studio and pick the **Debug** or **Release** preset, or run `cmake --preset release` and then `cmake --build build/release`.
+- `cmake/x64-windows-static-md.cmake` pins vcpkg to the v143 toolset. Without it, vcpkg picks the newest Visual Studio installed, and MSVC 14.50+ (VS 18) can't build the fmt version CommonLibSSE-NG depends on.
+- Set `SKYRIM_MODS_FOLDER` to your mod manager's mods folder to have builds deployed to `<mods>/AutoSEQ`. The DLL and ESP are always copied; the placeholder `AutoSEQ.bsa` is only copied when missing, so existing fixes survive.
+- **Release** builds also produce `dist/AutoSEQ/` and `dist/AutoSEQ-<version>.zip`, ready to upload. The version comes from `project(... VERSION ...)` in `CMakeLists.txt`.
 
-<img src="https://raw.githubusercontent.com/SkyrimDev/Images/main/images/screenshots/Setting%20Environment%20Variables/SKYRIM_MODS_FOLDER.png" height="150">
+## Credits
 
-## Finding Your "`mods`" Folder
+- The xEdit team: AutoSEQ follows xEdit's *Create SEQ File* rule.
+- The CommonLibSSE and CommonLibSSE-NG authors and contributors.
+- The SKSE team, and meh321 for Address Library.
+- The modding community members who documented the SEQ dialogue bug.
 
-In Mod Organizer 2:
+## License
 
-> Click the `...` next to "Mods" to get the full folder path
-
-<img src="https://raw.githubusercontent.com/SkyrimDev/Images/main/images/screenshots/MO2/MO2SettingsModsFolder.png" height="150">
-
-In Vortex:
-
-<img src="https://raw.githubusercontent.com/SkyrimDev/Images/main/images/screenshots/Vortex/VortexSettingsModsFolder.png" height="150">
-
-# Setup your own repository
-
-If you clone this template on GitHub, please:
-
-- Go into `LICENSE` and change the year and change `<YOUR NAME HERE>` to your name.
-- Go into `CODE_OF_CONDUCT.md` and change `<YOUR CONTACT INFO HERE>` to your contact information.
-
-The `LICENSE` defaults to using the [MIT License](https://choosealicense.com/licenses/mit/), a permissive license which is used by many popular Skyrim mods (_including [CommonLibSSE](https://github.com/Ryan-rsm-McKenzie/CommonLibSSE)_).
-
-The `CODE_OF_CONDUCT.md` defaults to using the [Contributor Covenant](https://www.contributor-covenant.org/), the most popular code of conduct for open source communities.
-
-If you'd like to know more about open source licenses, see:
-- [Licensing a repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)
-- [Choose an open source license](https://choosealicense.com/)
-
-# Sharing is Caring
-
-**If you use this template, PLEASE release your project as a public open source project.** 💖
-
-**Please do not release your SKSE plugin on Nexus/etc without making the source code available** \*
-
-> \* _You do you. But please help our community by sharing your source `<3`_
+[MIT](LICENSE)

@@ -12,8 +12,17 @@
 out
 build
 cmake-build*
+dist
 *.dll
 *.pdb
 
 # Skyrim archive files
 *.bsa
+# ...except the placeholder archive shipped with the mod
+!data/AutoSEQ.bsa
+
+# Python bytecode from tools/
+__pycache__
+
+# Local Claude Code settings
+.claude/

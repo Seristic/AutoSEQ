@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # [BEGIN set_project_name]
 # Set your project name. This will be the name of your SKSE .dll file.
-project(HelloWorld VERSION 0.0.1 LANGUAGES CXX)
+project(AutoSEQ VERSION 1.0.0 LANGUAGES CXX)
 
 # [END set_project_name]
 
@@ -39,9 +39,10 @@ endif()
 
 # Setup your SKSE plugin as an SKSE plugin!
 find_package(CommonLibSSE CONFIG REQUIRED)
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES plugin.cpp) # <--- specifies plugin.cpp
+add_commonlibsse_plugin(${PROJECT_NAME} SOURCES plugin.cpp StalledQuests.cpp SEQAudit.cpp SEQFiles.cpp)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
+target_compile_definitions(${PROJECT_NAME} PRIVATE _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING) # fmt 9.1.0 noise
 
 # When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
 # Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
@@ -59,8 +60,16 @@ if(DEFINED OUTPUT_FOLDER)
         POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
+        # Empty ESL-flagged plugin that makes the game load AutoSEQ.bsa
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/data/AutoSEQ.esp" "${OUTPUT_FOLDER}/AutoSEQ.esp"
+        # Placeholder archive so the DLL updates it in place inside the mod folder. Only copied when
+        # missing: the DLL rewrites it with the actual fixes, and a build must not wipe those.
+        COMMAND "${CMAKE_COMMAND}" -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/data/AutoSEQ.bsa -DDST=${OUTPUT_FOLDER}/AutoSEQ.bsa
+                -P "${CMAKE_CURRENT_BINARY_DIR}/copy_if_missing.cmake"
         VERBATIM
     )
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/copy_if_missing.cmake"
+        "if(NOT EXISTS \"\${DST}\")\n    file(COPY_FILE \"\${SRC}\" \"\${DST}\")\nendif()\n")
 
     # If you perform a "Debug" build, also copy .pdb file (for debug symbols)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -71,4 +80,31 @@ if(DEFINED OUTPUT_FOLDER)
             VERBATIM
         )
     endif()
+endif()
+
+# Release builds also lay the mod out in dist/<name>/ and zip it as dist/<name>-<version>.zip,
+# ready to upload. (Debug builds need Visual Studio's debug runtime, so they aren't packaged.)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(DIST_STAGE "${CMAKE_CURRENT_SOURCE_DIR}/dist/${PROJECT_NAME}")
+    set(DIST_ZIP "${CMAKE_CURRENT_SOURCE_DIR}/dist/${PROJECT_NAME}-${PROJECT_VERSION}.zip")
+
+    add_custom_command(
+        TARGET "${PROJECT_NAME}"
+        POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${DIST_STAGE}" "${DIST_ZIP}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${DIST_STAGE}/SKSE/Plugins"
+        COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:${PROJECT_NAME}>" "${DIST_STAGE}/SKSE/Plugins/"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/data/AutoSEQ.esp"
+                "${CMAKE_CURRENT_SOURCE_DIR}/data/AutoSEQ.bsa" "${DIST_STAGE}/"
+        VERBATIM
+    )
+    # Separate command so the zip is made from inside the freshly created staging folder.
+    add_custom_command(
+        TARGET "${PROJECT_NAME}"
+        POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E tar cf "${DIST_ZIP}" --format=zip AutoSEQ.esp AutoSEQ.bsa SKSE
+        WORKING_DIRECTORY "${DIST_STAGE}"
+        COMMENT "Packaging ${DIST_ZIP}"
+        VERBATIM
+    )
 endif()
