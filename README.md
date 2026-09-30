@@ -12,7 +12,7 @@ SEQ files go stale when:
 - a plugin's **master list changes**, which shifts the first byte of every FormID.
 - quests are added after the SEQ was generated, or the author never shipped one.
 
-Many mods pack their SEQ inside their BSA. A loose, regenerated SEQ file **does not override** a copy inside a BSA (tested in game), so regenerating it in xEdit isn't always enough.
+Many mods pack their SEQ inside their BSA. In testing, a loose SEQ file **did not override** a copy inside a mod's own BSA, so those can't be fixed with a loose file (one regenerated in xEdit included). AutoSEQ reports them instead.
 
 ## What AutoSEQ does
 
@@ -20,7 +20,7 @@ At the main menu, AutoSEQ:
 
 1. Reads every loaded plugin from disk and works out what its SEQ file must contain, using the same rule as xEdit's *Create SEQ File*: every Start Game Enabled quest the plugin adds, or that it newly flags as start-enabled.
 2. Reads the SEQ file the game actually sees (loose or inside a BSA) and compares the two.
-3. Writes corrected copies of any stale or missing SEQ files into `AutoSEQ.bsa`. The empty, ESL-flagged `AutoSEQ.esp` loads that archive, and because it loads last, it overrides the outdated copies. No other mod's files are touched.
+3. Writes a new, corrected SEQ file for each stale or missing one into its own mod folder (`AutoSEQ\Seq`). Your mod manager puts those on top of the old ones, the same way any mod overrides another. The SEQ files other mods ship are never edited, and nothing is written into `Data`. AutoSEQ keeps a list of the files it made in `Seq\AutoSEQ.txt` and won't overwrite anything that isn't on it.
 4. Prints a summary to the console, shows a message box when a restart is needed, and logs every plugin and quest it fixed.
 
 A missing SEQ is only created when one of the plugin's start-enabled quests has dialogue. The base game and Creation Club files are skipped.
@@ -29,9 +29,13 @@ As a safety net, after a save loads AutoSEQ also starts any start-enabled quest 
 
 ## Installing
 
-1. Install with Mod Organizer 2 or Vortex.
-2. Enable `AutoSEQ.esp` and put it at the **very end** of your load order. It's ESL-flagged, so it doesn't use a full plugin slot.
-3. Start the game. If AutoSEQ reports that it updated `AutoSEQ.bsa`, restart Skyrim before starting or loading a game.
+1. Install with Mod Organizer 2 or Vortex. AutoSEQ needs to be its own mod. If it's copied straight into `Data`, it won't write anything.
+2. Give it the highest priority: the bottom of MO2's left pane, or in Vortex, set it to load after any mod it conflicts with.
+3. Start the game. If AutoSEQ says it wrote new SEQ files, press F5 in MO2 (or Deploy Mods in Vortex) and restart Skyrim before starting or loading a game.
+
+There's no plugin and no BSA.
+
+**Upgrading from 1.0.0 or 1.1.0:** delete `AutoSEQ.esp` and `AutoSEQ.bsa` if you still have them (a clean reinstall does that). Those versions could write into `Data\Seq` and replace other mods' SEQ files: 1.0.0 when `AutoSEQ.esp` wasn't active, 1.1.0 outside MO2. If that happened to you, reinstall the affected mods to get their original files back.
 
 **Requirements:** [SKSE64](https://skse.silverlock.org/) and [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444). Developed and tested on 1.6.1170.
 
@@ -39,11 +43,18 @@ As a safety net, after a save loads AutoSEQ also starts any start-enabled quest 
 
 Open the console (`~`) at the main menu:
 
-| Message | Meaning |
+```
+AutoSEQ: 120 plugins need an SEQ file - 110 OK, 0 written, 0 not picked up yet, 0 overridden by another mod, 10 overridden by a BSA, 0 failed
+```
+
+| Count | Meaning |
 |---|---|
-| `AutoSEQ: all N SEQ files are correct (M supplied by AutoSEQ.bsa)` | Everything is fine. |
-| `AutoSEQ: X of N SEQ files were out of date - corrected in AutoSEQ.bsa, restart Skyrim to apply` | Fixes were written; restart once. |
-| `AutoSEQ: X of N SEQ files are still out of date - load AutoSEQ.esp last` | The archive isn't winning; check the load order. |
+| OK | The SEQ the game uses already lists every quest it should. |
+| written | New SEQ files were written this launch. Refresh your mod manager and restart once. |
+| not picked up yet | AutoSEQ's file is there, but the game doesn't see it. Check AutoSEQ is enabled and refresh (F5 in MO2, Deploy Mods in Vortex). |
+| overridden by another mod | Another mod's loose SEQ wins. Give AutoSEQ a higher priority. |
+| overridden by a BSA | The stale SEQ is packed in that mod's own BSA, and a loose file can't beat it. |
+| failed | Couldn't write the file. The log says why, for example a file with that name already in AutoSEQ's folder that AutoSEQ didn't make. |
 
 Details are in `Documents\My Games\Skyrim Special Edition\SKSE\AutoSEQ.log`.
 
@@ -60,7 +71,7 @@ Requirements: Visual Studio 2022 with the C++ workload (MSVC v143), CMake and vc
 
 - Open the folder in Visual Studio and pick the **Debug** or **Release** preset, or run `cmake --preset release` and then `cmake --build build/release`.
 - `cmake/x64-windows-static-md.cmake` pins vcpkg to the v143 toolset. Without it, vcpkg picks the newest Visual Studio installed, and MSVC 14.50+ (VS 18) can't build the fmt version CommonLibSSE-NG depends on.
-- Set `SKYRIM_MODS_FOLDER` to your mod manager's mods folder to have builds deployed to `<mods>/AutoSEQ`. The DLL and ESP are always copied; the placeholder `AutoSEQ.bsa` is only copied when missing, so existing fixes survive.
+- Set `SKYRIM_MODS_FOLDER` to your mod manager's mods folder to have builds deployed to `<mods>/AutoSEQ`. Only the DLL is copied, so the SEQ files AutoSEQ already wrote there are left alone.
 - **Release** builds also produce `dist/AutoSEQ/` and `dist/AutoSEQ-<version>.zip`, ready to upload. The version comes from `project(... VERSION ...)` in `CMakeLists.txt`.
 
 ## Credits

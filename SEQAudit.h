@@ -2,7 +2,5 @@
 
 namespace SEQ::Audit {
 
-    void ApplyPendingArchive();
-
     void Run();
 }

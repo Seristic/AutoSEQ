@@ -18,8 +18,6 @@ dist
 
 # Skyrim archive files
 *.bsa
-# ...except the placeholder archive shipped with the mod
-!data/AutoSEQ.bsa
 
 # Python bytecode from tools/
 __pycache__

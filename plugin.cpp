@@ -34,7 +34,6 @@ namespace {
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     SKSE::Init(a_skse);
     SetupLog();
-    SEQ::Audit::ApplyPendingArchive();
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* a_msg) {
         switch (a_msg->type) {

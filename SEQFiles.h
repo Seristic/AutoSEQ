@@ -33,7 +33,8 @@ namespace SEQ {
         // Cached. nullptr if the file is missing or can't be read safely.
         const PluginRecords* Load(const std::string& a_fileName);
 
-        // Mirrors xEdit's "Create SEQ File": every Start Game Enabled quest that is new in the plugin, or that sets SGE on a master quest which didn't have it.
+        // Mirrors xEdit's "Create SEQ File": every Start Game Enabled quest that is new in the plugin, or that sets SGE
+        // on a master quest which didn't have it.
         std::vector<const QuestRecord*> ExpectedSEQ(const PluginRecords& a_plugin);
 
         // Quests (file-relative FormIDs) that own a dialogue topic in this file. Not cached.
@@ -45,18 +46,4 @@ namespace SEQ {
     };
 
     bool WriteSEQ(const std::filesystem::path& a_path, const std::vector<std::uint32_t>& a_formIDs);
-
-    struct ArchiveFile {
-        std::string name;
-        std::vector<std::uint32_t> formIDs;
-    };
-
-    // Skyrim's BSA name hash (a_folder skips the extension handling).
-    std::uint64_t BSAHash(std::string_view a_name, bool a_folder);
-
-    // An uncompressed Skyrim SE archive holding every file in a single folder.
-    std::vector<char> BuildBSA(std::string_view a_folder, std::vector<ArchiveFile> a_files);
-
-    // Lower-case file names inside an archive that stores names (like the ones BuildBSA writes).
-    std::vector<std::string> ReadBSAFileNames(const std::filesystem::path& a_path);
 }
